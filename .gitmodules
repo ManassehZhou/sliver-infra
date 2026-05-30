@@ -1,0 +1,4 @@
+[submodule "vendor/sliver"]
+	path = vendor/sliver
+	url = https://github.com/BishopFox/sliver
+	shallow = true

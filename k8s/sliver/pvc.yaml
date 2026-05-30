@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: sliver-data
+  namespace: red-team
+spec:
+  accessModes:
+    - ReadWriteOnce
+  # On serverless (no fixed nodes), an Immediate-mode StorageClass cannot infer
+  # an availability zone and fails with "zone is empty". Use a topology-mode
+  # StorageClass so the CSI driver provisions the disk in the zone the pod lands
+  # in. Minimum disk size is 20Gi.
+  storageClassName: "alicloud-disk-topology-alltype"
+  resources:
+    requests:
+      storage: 20Gi

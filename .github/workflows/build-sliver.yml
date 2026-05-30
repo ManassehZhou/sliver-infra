@@ -1,0 +1,78 @@
+name: build-sliver-server
+
+# Build the Sliver C2 server image from the vendored upstream source
+# (vendor/sliver submodule) using its official multi-stage Dockerfile
+# "production" target, and push to GHCR.
+#
+# An extra stage (k8s/sliver/setcap.dockerfile) is appended to the upstream
+# Dockerfile, adding "production_with_cap" on top of "production" to grant the
+# server binary cap_net_bind_service so the non-root user can bind privileged
+# C2 ports (53/80/443). It is a pure append, so bumping the submodule never
+# conflicts.
+#
+# The submodule is pinned to a specific upstream tag. The build only runs when
+# that pointer moves (i.e. when the submodule is bumped to a new tag) or when
+# this workflow / the extra stage changes. The image version is derived from
+# the submodule's checked-out tag, so the image tracks whatever upstream tag is
+# vendored.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - vendor/sliver
+      - .github/workflows/build-sliver.yml
+      - k8s/sliver/setcap.dockerfile
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/sliver-server
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout (with submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Resolve parameters
+        id: p
+        run: |
+          version="$(git -C vendor/sliver describe --tags --always)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "image=$(echo "${REGISTRY}/${IMAGE_NAME}" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      # Append the setcap stage to upstream's Dockerfile (pure append; never
+      # conflicts on submodule bumps), then build that target.
+      - name: Append setcap stage
+        run: cat k8s/sliver/setcap.dockerfile >> vendor/sliver/Dockerfile
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: vendor/sliver
+          target: production_with_cap
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ steps.p.outputs.image }}:latest
+            ${{ steps.p.outputs.image }}:${{ steps.p.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

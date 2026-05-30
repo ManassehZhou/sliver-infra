@@ -1,0 +1,57 @@
+# Operator-facing service: multiplayer port only, cluster-internal.
+# Operators connect via: kubectl -n red-team port-forward svc/sliver 31337:31337
+apiVersion: v1
+kind: Service
+metadata:
+  name: sliver
+  namespace: red-team
+  labels:
+    app: sliver
+    role: c2-server
+spec:
+  type: ClusterIP
+  selector:
+    app: sliver
+  ports:
+    - name: multiplayer
+      port: 31337
+      targetPort: 31337
+      protocol: TCP
+---
+# Implant-facing C2 service: public LoadBalancer (SLB) for HTTP/HTTPS/DNS
+# callbacks. Implants reach the C2 directly at the SLB address; the Sliver pod
+# itself keeps only an internal IP.
+apiVersion: v1
+kind: Service
+metadata:
+  name: sliver-c2
+  namespace: red-team
+  labels:
+    app: sliver
+    role: c2-server
+  annotations:
+    service.beta.kubernetes.io/alibaba-cloud-loadbalancer-spec: "slb.s2.small"
+    service.beta.kubernetes.io/alibaba-cloud-loadbalancer-name: "silver-c2"
+    # Public-facing SLB.
+    service.beta.kubernetes.io/alibaba-cloud-loadbalancer-address-type: "internet"
+    # Nodeless ACS/ECI cluster: register pod ENIs directly as SLB backends.
+    # Without this the SLB has no ECS nodes to target ("no available nodes").
+    service.beta.kubernetes.io/backend-type: "eni"
+spec:
+  type: LoadBalancer
+  selector:
+    app: sliver
+    role: c2-server
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP
+    - name: https
+      port: 443
+      targetPort: 443
+      protocol: TCP
+    - name: dns-udp
+      port: 53
+      targetPort: 53
+      protocol: UDP

@@ -1,0 +1,41 @@
+# ─── Terraform ───────────────────────────────────────────────
+.terraform/
+.terraform.tfstate.lock.info
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+*.tfplan
+tfplan
+# Environment-specific values (operator IPs, etc.); only the .example is committed
+terraform/terraform.tfvars
+*.auto.tfvars
+# Keep .terraform.lock.hcl committed to pin provider versions.
+
+# ─── Secrets / kubeconfig (cluster certs, never commit) ───────
+kubeconfig.yaml
+kubeconfig*.yaml
+terraform/kubeconfig.yaml
+*.kubeconfig
+*.pem
+*.key
+
+# ─── Sliver operator profiles ────────────────────────────────
+*.cfg
+
+# ─── Claude Code / AI tooling (local only) ───────────────────
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+.mcp.json
+
+# ─── Editor / OS ─────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*~

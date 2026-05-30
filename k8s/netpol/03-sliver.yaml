@@ -1,0 +1,56 @@
+# Sliver Pod network policy
+# - Ingress: public C2 callbacks (80/443/53) via the SLB; operator multiplayer
+#   (31337) only from within the cluster (kubectl port-forward via the apiserver).
+# - Egress: DNS + all egress (C2 callbacks, asset downloads).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sliver-policy
+  namespace: red-team
+spec:
+  podSelector:
+    matchLabels:
+      app: sliver
+      role: c2-server
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Public implant callbacks (SLB → pod)
+    - from:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+        - protocol: UDP
+          port: 53
+    # Operator multiplayer via kubectl port-forward (traffic from kube-system)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: 31337
+  egress:
+    # DNS resolution
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # C2 callbacks: allow all egress (red-team scenarios call back to arbitrary C2).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+        - protocol: UDP

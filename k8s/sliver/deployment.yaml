@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sliver
+  namespace: red-team
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sliver
+  template:
+    metadata:
+      labels:
+        app: sliver
+        role: c2-server
+    spec:
+      # Serverless (ECI): tolerate the virtual node NoSchedule taint.
+      tolerations:
+        - key: virtual-kubelet.io/provider
+          operator: Exists
+          effect: NoSchedule
+      # Run as the non-root "sliver" user (uid/gid 999).
+      # - C2 listeners bind privileged ports (53/80/443). On the ECI runtime a
+      #   pod securityContext capability does NOT reach a non-root process's
+      #   effective set, so the server binary instead carries a file capability
+      #   (cap_net_bind_service=+ep), applied by k8s/sliver/Dockerfile.setcap at
+      #   build time. The kernel honors it at exec regardless of UID.
+      # - fsGroup=999 makes kubelet chown the root-owned disk PVC to the sliver
+      #   group so the server can write ~/.sliver.
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: sliver
+          # Image is built from the upstream Sliver repo (production target) by
+          # .github/workflows/build-sliver.yml and pushed to GHCR. The upstream
+          # image runs as user "sliver" (HOME=/home/sliver), binary at
+          # /opt/sliver-server, data dir ~/.sliver.
+          image: ghcr.io/manassehzhou/sliver-infra/sliver-server:latest
+          # The PVC is empty on first boot and shadows the assets unpacked at
+          # build time, so unpack once into the volume, then run the daemon.
+          command: ["/opt/sliver-server"]
+          args:
+            - daemon
+          ports:
+            # Operator multiplayer (reached via port-forward, not public)
+            - name: multiplayer
+              containerPort: 31337
+              protocol: TCP
+            # Implant-facing C2 listeners (configured at runtime by the operator)
+            - name: http
+              containerPort: 80
+              protocol: TCP
+            - name: https
+              containerPort: 443
+              protocol: TCP
+            - name: dns-udp
+              containerPort: 53
+              protocol: UDP
+          # Pin HOME so Sliver's data dir (~/.sliver) resolves to the mounted PVC.
+          env:
+            - name: HOME
+              value: /home/sliver
+          volumeMounts:
+            - name: sliver-data
+              mountPath: /home/sliver/.sliver
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          livenessProbe:
+            tcpSocket:
+              port: 31337
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            tcpSocket:
+              port: 31337
+            initialDelaySeconds: 20
+            periodSeconds: 10
+      volumes:
+        - name: sliver-data
+          persistentVolumeClaim:
+            claimName: sliver-data

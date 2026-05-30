@@ -1,0 +1,14 @@
+region = "cn-hangzhou"
+# Named credential profile in ~/.aliyun/config.json (or leave empty for env-var creds)
+credential_profile = "default"
+cluster_name = "silver-redteam"
+vpc_cidr     = "10.10.0.0/16"
+nat_bandwidth = 100
+
+# Tighten to your operator IPs; do not use 0.0.0.0/0 in production
+admin_cidrs = ["<YOUR_OPERATOR_IP>/32"]
+
+public_api_endpoint = true
+deletion_protection = false
+
+# resource_group_id = "rg-xxxxxxxxxxxx"
